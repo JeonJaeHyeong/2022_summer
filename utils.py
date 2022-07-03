@@ -9,3 +9,7 @@ def RMSE(R, pred):
         loss += pow(R[x, y] - pred[x, y], 2)
                 
     return np.sqrt(loss/len(rx))
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
