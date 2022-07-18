@@ -30,11 +30,13 @@ def load_rating_data():
         uid = int(userid)
         mid = int(movieid)
         rat = float(rating)
-        prefer.append([uid, mid, rat])
+        t = int(ts)
+        prefer.append([uid, mid, rat, t])
     data = np.array(prefer)
     df = pd.DataFrame(data).reset_index(drop=True)
-    df.columns = ['user_id', 'item_id', 'rating']
-    return df
+    df.columns = ['uid', 'mid', 'rating', 'timestamp']
+    
+    return rename(df)
 
 
 # load ml-1m rating data
@@ -43,17 +45,58 @@ def load_rating_1m():
     file_path = "data/ml-1m/ratings.dat"
     rating = pd.read_csv(file_path, sep='::', engine='python')
     rating.columns = ['uid', 'mid', 'rating', 'timestamp']
-    user_id = rating[['uid']].drop_duplicates().reindex()
+    
+    return rename(rating)
+
+def rename(df):
+    
+    user_id = df[['uid']].drop_duplicates().reindex()
     user_id['user_id'] = np.arange(len(user_id))
-    item_id = rating[['mid']].drop_duplicates()
+    item_id = df[['mid']].drop_duplicates()
     item_id['item_id'] = np.arange(len(item_id))
 
-    rating = pd.merge(rating, user_id, on=['uid'], how='left')
-    rating = pd.merge(rating, item_id, on=['mid'], how='left')
+    df = pd.merge(df, user_id, on=['uid'], how='left')
+    df = pd.merge(df, item_id, on=['mid'], how='left')
 
-    rating = rating[['user_id', 'item_id', 'rating', 'timestamp']]
+    df = df[['user_id', 'item_id', 'rating', 'timestamp']]
+
+    return df 
+
+def one_hot_data(df, original):
+    users = original.user_id.unique()
+    items = original.item_id.unique()
+    user_1hot = np.zeros((len(df), len(users)))
+    for i in range(len(df)):
+        user_1hot[i, int(df.user_id[i]) - 1] = 1    
+        
+    item_1hot = np.zeros((len(df), len(items)))
+    for i in range(len(df)):
+        item_1hot[i, int(df.item_id[i]) - 1] = 1    
     
-    return rating
+    time_vec = np.zeros((len(df), 1))
+    for i in range(len(df)):
+        time_vec[i] = df.timestamp[i]
+        
+    rating_mat = np.zeros((len(users), len(items)))
+    for i in range(len(df)): #df.itertuples():
+        rating_mat[int(df.user_id[i])-1, int(df.item_id[i])-1] = df.rating[i]
+    rating_mat = np.array(np.vectorize(lambda x: 0 if x==0 else 1)(rating_mat))
+    
+    
+    # Build movie rated dataset
+    movie_rated = np.zeros((len(df), len(items)))
+    for i in range(len(df)):
+        movie_rated[i] = rating_mat[df["user_id"][i]-1]
+
+    movie_rated = movie_rated / movie_rated.sum(axis = 1)[:, np.newaxis]
+    
+    X = np.concatenate([user_1hot, item_1hot, movie_rated], axis = 1)
+    Y  = np.zeros((len(df), 1))
+    for i in range(len(df)):
+        Y[i] = df.rating[i]
+    
+    return X, Y
+    
 
 class information():
 
